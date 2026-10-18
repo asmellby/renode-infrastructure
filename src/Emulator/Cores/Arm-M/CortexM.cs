@@ -177,6 +177,11 @@ namespace Antmicro.Renode.Peripherals.CPU
             SetIDAURegion(regionIndex, new IDAURegion(baseAddress, limitAddress, enabled, nonSecureCallable));
         }
 
+        public void SetIDAURegion(uint regionIndex, uint baseAddress, uint limitAddress, bool enabled, bool nonSecureCallable, bool secure)
+        {
+            SetIDAURegion(regionIndex, new IDAURegion(baseAddress, limitAddress, enabled, nonSecureCallable, secure));
+        }
+
         /// <remarks>
         /// Should only be used for TrustZone CPUs, <see cref="RecoverableException"/> is thrown otherwise.
         /// It's also thrown in case <paramref name="region"/>'s index is greater than <see cref="NumberOfIDAURegions"/>.
@@ -1481,16 +1486,28 @@ namespace Antmicro.Renode.Peripherals.CPU
             }
 
             public IDAURegion(uint baseAddress, uint limitAddress, bool enabled, bool nonSecureCallable)
+                : this(baseAddress, limitAddress, enabled, nonSecureCallable, secure: false)
+            {
+            }
+
+            // The attribution of the region (ARMv8-M ARM rule MVCM): Secure and Non-secure callable when
+            // nonSecureCallable is set, otherwise Secure when secure is set, otherwise Non-secure
+            public IDAURegion(uint baseAddress, uint limitAddress, bool enabled, bool nonSecureCallable, bool secure)
             {
                 if(!IsBaseAddressValid(baseAddress) || !IsLimitAddressValid(limitAddress))
                 {
                     throw new RecoverableException($"IDAU region must be {IDAU_SAURegionMinSize}B-aligned and the limit is inclusive, "
                         + $"e.g. 0x20-0x7F (limit=0x80 isn't valid); was: 0x{baseAddress:X8}-0x{limitAddress:X8}");
                 }
+                if(nonSecureCallable && secure)
+                {
+                    throw new RecoverableException("IDAU region can't be both Non-secure callable and Secure; a Non-secure callable region is Secure already");
+                }
                 BaseAddress = baseAddress;
                 LimitAddress = limitAddress;
                 Enabled = enabled;
                 NonSecureCallable = nonSecureCallable;
+                Secure = secure;
             }
 
             // tlib's IDAU configuration is currently similar to SAU. There are indexed regions for which registers contain
@@ -1501,6 +1518,7 @@ namespace Antmicro.Renode.Peripherals.CPU
                 LimitAddress = rlar | ~IDAU_SAURegionAddressMask;
                 Enabled = (rlar & IDAURlarEnabledFlag) == IDAURlarEnabledFlag;
                 NonSecureCallable = (rlar & IDAURlarNonSecureCallableFlag) == IDAURlarNonSecureCallableFlag;
+                Secure = (rlar & IDAURlarSecureFlag) == IDAURlarSecureFlag;
             }
 
             public uint ToRBAR()
@@ -1513,6 +1531,7 @@ namespace Antmicro.Renode.Peripherals.CPU
                 uint rlar = LimitAddress & IDAU_SAURegionAddressMask;
                 rlar |= Enabled ? IDAURlarEnabledFlag : 0u;
                 rlar |= NonSecureCallable ? IDAURlarNonSecureCallableFlag : 0u;
+                rlar |= Secure ? IDAURlarSecureFlag : 0u;
                 return rlar;
             }
 
@@ -1522,6 +1541,7 @@ namespace Antmicro.Renode.Peripherals.CPU
                     + $"  Enabled: {Enabled}\n"
                     + $"  From: 0x{BaseAddress:x}, To: 0x{LimitAddress:x}\n"
                     + $"  Is Non-secure Callable: {NonSecureCallable}\n"
+                    + $"  Is Secure: {Secure}\n"
                     + "]";
             }
 
@@ -1535,8 +1555,11 @@ namespace Antmicro.Renode.Peripherals.CPU
 
             public bool NonSecureCallable { get; private set; }
 
+            public bool Secure { get; private set; }
+
             private const uint IDAURlarEnabledFlag = 1u << 0;
             private const uint IDAURlarNonSecureCallableFlag = 1u << 1;
+            private const uint IDAURlarSecureFlag = 1u << 2;
         }
 
         // GPIO pins that should be treated as signals.
