@@ -678,6 +678,18 @@ namespace Antmicro.Renode.Peripherals.IRQControllers
                 // set only not reserved values
                 SetTrustZoneBankedRegisterValue(isSecure, (val) => cpu.FPDSCR = val, (val) => cpu.FPDSCR_NS = val, value & 0x07c00000);
                 break;
+            case Registers.BusFaultAddress:
+                // Armv8-M ARM, D1.2.6: BFAR is read/write, and RAZ/WI from
+                // Non-secure state while BusFault targets Secure state.
+                if(CanAccessNonBankedFaultState(isSecure))
+                {
+                    cpu.BusFaultAddress = value;
+                }
+                break;
+            case Registers.MemoryFaultAddress:
+                // Armv8-M ARM, D1.2.165: MMFAR is read/write and banked between Security states.
+                SetTrustZoneBankedRegisterValue(isSecure, (val) => cpu.MemoryFaultAddress = val, (val) => cpu.MemoryFaultAddressNonSecure = val, value);
+                break;
             case Registers.ConfigurationAndControl:
                 if(FilterCcrDiv0Write)
                 {
@@ -1808,7 +1820,15 @@ namespace Antmicro.Renode.Peripherals.IRQControllers
              * so we don't have to worry about invalidating it between exceptions.
              * If there is an address here, it's always valid */
             Registers.SecureFaultAddress.Define(RegisterCollection)
-                .WithValueField(0, 32, FieldMode.Read, valueProviderCallback: _ => isNextAccessSecure ? cpu.SecureFaultAddress : 0, name: "Address");
+                // Armv8-M ARM, D1.2.228: SFAR is read/write, and RAZ/WI when accessed as Non-secure.
+                .WithValueField(0, 32, valueProviderCallback: _ => isNextAccessSecure ? cpu.SecureFaultAddress : 0,
+                    writeCallback: (_, value) =>
+                    {
+                        if(isNextAccessSecure)
+                        {
+                            cpu.SecureFaultAddress = (uint)value;
+                        }
+                    }, name: "Address");
         }
 
         private void DefineTightlyCoupledMemoryControlRegisters()

@@ -752,6 +752,10 @@ namespace Antmicro.Renode.Peripherals.CPU
             {
                 return tlibGetMemoryFaultAddress(ShouldAccessBeSecure());
             }
+            set
+            {
+                tlibSetMemoryFaultAddress(value, ShouldAccessBeSecure());
+            }
         }
 
         public UInt32 BusFaultAddress
@@ -759,6 +763,10 @@ namespace Antmicro.Renode.Peripherals.CPU
             get
             {
                 return tlibGetBusFaultAddress();
+            }
+            set
+            {
+                tlibSetBusFaultAddress(value);
             }
         }
 
@@ -891,6 +899,11 @@ namespace Antmicro.Renode.Peripherals.CPU
                 AssertTrustZoneEnabled("get SecureFaultAddress");
                 return tlibGetSecureFaultAddress();
             }
+            set
+            {
+                AssertTrustZoneEnabled("set SecureFaultAddress");
+                tlibSetSecureFaultAddress(value);
+            }
         }
 
         public UInt32 MemoryFaultAddressNonSecure
@@ -899,6 +912,11 @@ namespace Antmicro.Renode.Peripherals.CPU
             {
                 AssertTrustZoneEnabled("get MemoryFaultAddress_NS");
                 return tlibGetMemoryFaultAddress(0u);
+            }
+            set
+            {
+                AssertTrustZoneEnabled("set MemoryFaultAddress_NS");
+                tlibSetMemoryFaultAddress(value, 0u);
             }
         }
 
@@ -1343,7 +1361,13 @@ namespace Antmicro.Renode.Peripherals.CPU
         private readonly Func<uint, uint> tlibGetMemoryFaultAddress;
 
         [Import]
+        private readonly Action<uint, uint> tlibSetMemoryFaultAddress;
+
+        [Import]
         private readonly Func<uint> tlibGetBusFaultAddress;
+
+        [Import]
+        private readonly Action<uint> tlibSetBusFaultAddress;
 
         [Import]
         private readonly Action<uint> tlibRaisePreciseBusFault;
@@ -1356,6 +1380,9 @@ namespace Antmicro.Renode.Peripherals.CPU
 
         [Import]
         private readonly Func<uint> tlibGetSecureFaultAddress;
+
+        [Import]
+        private readonly Action<uint> tlibSetSecureFaultAddress;
 
         [Import]
         private readonly Func<uint> tlibGetSecureFaultStatus;
